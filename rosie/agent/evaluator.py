@@ -25,5 +25,5 @@ def evaluate(question: str, response: str, provider: str | None = None) -> dict:
         content = result.content if hasattr(result, "content") else str(result)
         return json.loads(content)
     except Exception as e:
-        logger.warning(f"Evaluation failed: {e}")
-        return {"accuracy": 0, "completeness": 0, "clarity": 0, "overall": 0, "reasoning": str(e)}
+        logger.warning(f"Failed to parse LLM evaluation response as JSON: {e}")
+        return {"accuracy": 0, "completeness": 0, "clarity": 0, "overall": 0, "reasoning": f"Failed to parse LLM evaluation response as JSON: {e}"}

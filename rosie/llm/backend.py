@@ -25,6 +25,6 @@ def get_llm(provider: str | None = None, model: str | None = None) -> BaseChatMo
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(
             model=model or os.getenv("OPENAI_MODEL", "gpt-4o"),
-            api_key=os.getenv("OPENAI_API_KEY", "sk-placeholder"),
+            api_key=os.getenv("OPENAI_API_KEY"),
             base_url=os.getenv("OPENAI_BASE_URL", None),
         )
