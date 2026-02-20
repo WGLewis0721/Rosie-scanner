@@ -23,13 +23,16 @@ Rosie is an AI-powered tool that lets you ask plain-English questions about your
 
 ## What Does Rosie Do?
 
-Rosie scans your AWS environment (EC2, RDS, Lambda, ECS, S3, IAM, SSM), stores the inventory, and exposes a chat interface powered by a LangChain ReAct agent. You can ask questions like:
+Rosie scans your AWS environment (EC2, RDS, Lambda, ECS, S3, IAM, SSM, and network topology), stores the inventory, and exposes a chat interface powered by a LangChain ReAct agent. You can ask questions like:
 
 - *"What version of PostgreSQL are we running?"*
 - *"Which Lambda functions are still on deprecated runtimes?"*
 - *"Which EC2 instances have not been patched in 90 days?"*
 - *"Do we have any publicly accessible databases?"*
 - *"Which IAM roles haven't been used recently?"*
+- *"What VPCs do we have and what are their CIDR ranges?"*
+- *"Which security groups allow inbound traffic from 0.0.0.0/0?"*
+- *"Do we have any VPCs without an internet gateway?"*
 
 Rosie answers by reasoning over the live inventory — no manual digging required.
 
@@ -103,6 +106,8 @@ Demo mode uses [moto](https://github.com/getmoto/moto) to create a mock AWS envi
    - *"Which Lambda functions are running deprecated runtimes?"*
    - *"Do we have any publicly accessible RDS databases?"*
    - *"Which S3 buckets are missing public access blocks?"*
+   - *"What VPCs do we have and what are their CIDR ranges?"*
+   - *"Which security groups allow inbound SSH from 0.0.0.0/0?"*
    - *"Give me a summary of all resources."*
 
 ---
@@ -261,6 +266,7 @@ Rosie is made up of four layers that work together:
 │ S3          │             │             │                   │
 │ IAM         │             │             │                   │
 │ SSM         │             │             │                   │
+│ Network     │             │             │                   │
 └─────────────┴─────────────┴─────────────┴───────────────────┘
 ```
 
@@ -273,7 +279,7 @@ Rosie is made up of four layers that work together:
 
 ## What Rosie Collects
 
-Rosie collects data from seven AWS services: EC2, RDS, Lambda, ECS, S3, IAM, and SSM.
+Rosie collects data from eight AWS services: EC2, RDS, Lambda, ECS, S3, IAM, SSM, and network topology.
 
 Each resource is stored in a standardized format:
 
@@ -289,6 +295,22 @@ Each resource is stored in a standardized format:
   "collected_at": "2024-01-15T10:30:00+00:00"
 }
 ```
+
+The network collector captures your full VPC topology:
+
+| Resource Type | What it represents |
+|---|---|
+| `ec2:vpc` | Virtual Private Clouds and their CIDR ranges |
+| `ec2:subnet` | Subnets, availability zones, and public IP settings |
+| `ec2:security_group` | Security group ingress and egress rules |
+| `ec2:nacl` | Network ACL rules and subnet associations |
+| `ec2:route_table` | Route tables and their routes |
+| `ec2:internet_gateway` | Internet gateways and VPC attachments |
+| `ec2:nat_gateway` | NAT gateways and their public/private IPs |
+| `ec2:transit_gateway` | Transit gateways for multi-VPC connectivity |
+| `ec2:tgw_attachment` | Transit gateway attachments |
+| `ec2:vpc_peering` | VPC peering connections |
+| `ec2:vpc_endpoint` | VPC endpoints for AWS service access |
 
 Collectors run concurrently across all services, reducing total scan time from minutes to seconds.
 
