@@ -249,7 +249,278 @@ def seed() -> None:
             )
 
     # ------------------------------------------------------------------ #
-    # Collect & save
+    # Network Topology
+    # ------------------------------------------------------------------ #
+    log.info("Creating network topology …")
+
+    # Production VPC
+    prod_vpc = ec2.create_vpc(
+        CidrBlock="10.0.0.0/16",
+        TagSpecifications=[{
+            "ResourceType": "vpc",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-vpc"},
+                {"Key": "Environment", "Value": "prod"},
+                {"Key": "Project",     "Value": "rosie-demo"},
+            ],
+        }],
+    )["Vpc"]
+    prod_vpc_id = prod_vpc["VpcId"]
+
+    # Staging VPC
+    staging_vpc = ec2.create_vpc(
+        CidrBlock="10.1.0.0/16",
+        TagSpecifications=[{
+            "ResourceType": "vpc",
+            "Tags": [
+                {"Key": "Name",        "Value": "staging-vpc"},
+                {"Key": "Environment", "Value": "staging"},
+                {"Key": "Project",     "Value": "rosie-demo"},
+            ],
+        }],
+    )["Vpc"]
+    staging_vpc_id = staging_vpc["VpcId"]
+
+    # Subnets in prod VPC
+    pub_subnet_a = ec2.create_subnet(
+        VpcId=prod_vpc_id,
+        CidrBlock="10.0.1.0/24",
+        AvailabilityZone=f"{REGION}a",
+        TagSpecifications=[{
+            "ResourceType": "subnet",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-public-subnet-a"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )["Subnet"]
+    pub_subnet_b = ec2.create_subnet(
+        VpcId=prod_vpc_id,
+        CidrBlock="10.0.2.0/24",
+        AvailabilityZone=f"{REGION}b",
+        TagSpecifications=[{
+            "ResourceType": "subnet",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-public-subnet-b"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )["Subnet"]
+    priv_subnet_a = ec2.create_subnet(
+        VpcId=prod_vpc_id,
+        CidrBlock="10.0.11.0/24",
+        AvailabilityZone=f"{REGION}a",
+        TagSpecifications=[{
+            "ResourceType": "subnet",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-private-subnet-a"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )["Subnet"]
+    priv_subnet_b = ec2.create_subnet(
+        VpcId=prod_vpc_id,
+        CidrBlock="10.0.12.0/24",
+        AvailabilityZone=f"{REGION}b",
+        TagSpecifications=[{
+            "ResourceType": "subnet",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-private-subnet-b"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )["Subnet"]
+
+    # Internet Gateway for prod VPC
+    igw = ec2.create_internet_gateway(
+        TagSpecifications=[{
+            "ResourceType": "internet-gateway",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-igw"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )["InternetGateway"]
+    ec2.attach_internet_gateway(
+        InternetGatewayId=igw["InternetGatewayId"],
+        VpcId=prod_vpc_id,
+    )
+
+    # NAT Gateway in public subnet
+    eip = ec2.allocate_address(Domain="vpc")
+    nat_gw = ec2.create_nat_gateway(
+        SubnetId=pub_subnet_a["SubnetId"],
+        AllocationId=eip["AllocationId"],
+        TagSpecifications=[{
+            "ResourceType": "natgateway",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-nat-gw"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )["NatGateway"]
+
+    # Public route table
+    pub_rt = ec2.create_route_table(
+        VpcId=prod_vpc_id,
+        TagSpecifications=[{
+            "ResourceType": "route-table",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-public-rt"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )["RouteTable"]
+    ec2.create_route(
+        RouteTableId=pub_rt["RouteTableId"],
+        DestinationCidrBlock="0.0.0.0/0",
+        GatewayId=igw["InternetGatewayId"],
+    )
+    ec2.associate_route_table(
+        RouteTableId=pub_rt["RouteTableId"],
+        SubnetId=pub_subnet_a["SubnetId"],
+    )
+    ec2.associate_route_table(
+        RouteTableId=pub_rt["RouteTableId"],
+        SubnetId=pub_subnet_b["SubnetId"],
+    )
+
+    # Private route table
+    priv_rt = ec2.create_route_table(
+        VpcId=prod_vpc_id,
+        TagSpecifications=[{
+            "ResourceType": "route-table",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-private-rt"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )["RouteTable"]
+    ec2.create_route(
+        RouteTableId=priv_rt["RouteTableId"],
+        DestinationCidrBlock="0.0.0.0/0",
+        NatGatewayId=nat_gw["NatGatewayId"],
+    )
+    ec2.associate_route_table(
+        RouteTableId=priv_rt["RouteTableId"],
+        SubnetId=priv_subnet_a["SubnetId"],
+    )
+    ec2.associate_route_table(
+        RouteTableId=priv_rt["RouteTableId"],
+        SubnetId=priv_subnet_b["SubnetId"],
+    )
+
+    # Security Groups
+    web_sg = ec2.create_security_group(
+        GroupName="web-sg",
+        Description="Web tier - allow HTTP/HTTPS from internet",
+        VpcId=prod_vpc_id,
+        TagSpecifications=[{
+            "ResourceType": "security-group",
+            "Tags": [
+                {"Key": "Name",        "Value": "web-sg"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )
+    ec2.authorize_security_group_ingress(
+        GroupId=web_sg["GroupId"],
+        IpPermissions=[
+            {"IpProtocol": "tcp", "FromPort": 80,  "ToPort": 80,  "IpRanges": [{"CidrIp": "0.0.0.0/0"}]},
+            {"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]},
+        ],
+    )
+
+    app_sg = ec2.create_security_group(
+        GroupName="app-sg",
+        Description="App tier - allow traffic from web tier only",
+        VpcId=prod_vpc_id,
+        TagSpecifications=[{
+            "ResourceType": "security-group",
+            "Tags": [
+                {"Key": "Name",        "Value": "app-sg"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )
+    ec2.authorize_security_group_ingress(
+        GroupId=app_sg["GroupId"],
+        IpPermissions=[
+            {"IpProtocol": "tcp", "FromPort": 8080, "ToPort": 8080,
+             "UserIdGroupPairs": [{"GroupId": web_sg["GroupId"]}]},
+        ],
+    )
+
+    db_sg = ec2.create_security_group(
+        GroupName="db-sg",
+        Description="DB tier - allow traffic from app tier only",
+        VpcId=prod_vpc_id,
+        TagSpecifications=[{
+            "ResourceType": "security-group",
+            "Tags": [
+                {"Key": "Name",        "Value": "db-sg"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )
+    ec2.authorize_security_group_ingress(
+        GroupId=db_sg["GroupId"],
+        IpPermissions=[
+            {"IpProtocol": "tcp", "FromPort": 5432, "ToPort": 5432,
+             "UserIdGroupPairs": [{"GroupId": app_sg["GroupId"]}]},
+        ],
+    )
+
+    # Overly-permissive security group (demo alert: SSH open to internet)
+    bastion_sg = ec2.create_security_group(
+        GroupName="bastion-sg",
+        Description="Bastion host - SSH access (demo: open to internet)",
+        VpcId=prod_vpc_id,
+        TagSpecifications=[{
+            "ResourceType": "security-group",
+            "Tags": [
+                {"Key": "Name",        "Value": "bastion-sg"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )
+    ec2.authorize_security_group_ingress(
+        GroupId=bastion_sg["GroupId"],
+        IpPermissions=[
+            {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22,
+             "IpRanges": [{"CidrIp": "0.0.0.0/0"}]},  # intentionally open for demo alert
+        ],
+    )
+
+    # VPC Endpoint for S3 (Gateway type)
+    ec2.create_vpc_endpoint(
+        VpcId=prod_vpc_id,
+        ServiceName=f"com.amazonaws.{REGION}.s3",
+        VpcEndpointType="Gateway",
+        RouteTableIds=[priv_rt["RouteTableId"]],
+        TagSpecifications=[{
+            "ResourceType": "vpc-endpoint",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-s3-endpoint"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )
+
+    # VPC Peering between prod and staging
+    ec2.create_vpc_peering_connection(
+        VpcId=prod_vpc_id,
+        PeerVpcId=staging_vpc_id,
+        TagSpecifications=[{
+            "ResourceType": "vpc-peering-connection",
+            "Tags": [
+                {"Key": "Name",        "Value": "prod-to-staging-peering"},
+                {"Key": "Environment", "Value": "prod"},
+            ],
+        }],
+    )
+
+    # ------------------------------------------------------------------ #
     # ------------------------------------------------------------------ #
     log.info("Running Rosie collectors …")
     resources = run_all(region=REGION, account_id=ACCOUNT_ID)
@@ -265,6 +536,9 @@ def seed() -> None:
     log.info('  "Which Lambda functions are running deprecated runtimes?"')
     log.info('  "Do we have any publicly accessible RDS databases?"')
     log.info('  "Which S3 buckets are missing public access blocks?"')
+    log.info('  "What VPCs do we have and what are their CIDR ranges?"')
+    log.info('  "Which security groups allow inbound SSH from 0.0.0.0/0?"')
+    log.info('  "Do we have a NAT gateway in production?"')
     log.info('  "Give me a summary of all resources."')
 
 
