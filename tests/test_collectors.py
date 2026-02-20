@@ -1,7 +1,7 @@
 import pytest
 import boto3
 from moto import mock_aws
-from rosie.collectors import ec2, rds, lambda_, s3, iam, ssm
+from rosie.collectors import ec2, rds, lambda_, s3, iam, ssm, network
 
 
 @mock_aws
@@ -102,3 +102,122 @@ def test_ssm_collect():
         resources = ssm.collect("us-east-1", "123456789012")
     assert isinstance(resources, list)
     assert resources == []
+
+
+@mock_aws
+def test_network_collect_vpc():
+    region = "us-east-1"
+    client = boto3.client("ec2", region_name=region)
+    vpc = client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]
+    resources = network.collect(region, "123456789012")
+    vpc_resources = [r for r in resources if r["resource_type"] == "ec2:vpc"]
+    assert any(r["resource_id"] == vpc["VpcId"] for r in vpc_resources)
+    r = next(r for r in vpc_resources if r["resource_id"] == vpc["VpcId"])
+    assert r["details"]["cidr_block"] == "10.0.0.0/16"
+
+
+@mock_aws
+def test_network_collect_subnet():
+    region = "us-east-1"
+    client = boto3.client("ec2", region_name=region)
+    vpc = client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]
+    subnet = client.create_subnet(VpcId=vpc["VpcId"], CidrBlock="10.0.1.0/24")["Subnet"]
+    resources = network.collect(region, "123456789012")
+    subnet_resources = [r for r in resources if r["resource_type"] == "ec2:subnet"]
+    assert any(r["resource_id"] == subnet["SubnetId"] for r in subnet_resources)
+    r = next(r for r in subnet_resources if r["resource_id"] == subnet["SubnetId"])
+    assert r["details"]["vpc_id"] == vpc["VpcId"]
+    assert r["details"]["cidr_block"] == "10.0.1.0/24"
+
+
+@mock_aws
+def test_network_collect_security_group():
+    region = "us-east-1"
+    client = boto3.client("ec2", region_name=region)
+    vpc = client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]
+    sg = client.create_security_group(
+        GroupName="test-sg", Description="Test SG", VpcId=vpc["VpcId"]
+    )
+    client.authorize_security_group_ingress(
+        GroupId=sg["GroupId"],
+        IpPermissions=[{"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443,
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}],
+    )
+    resources = network.collect(region, "123456789012")
+    sg_resources = [r for r in resources if r["resource_type"] == "ec2:security_group"]
+    assert any(r["resource_id"] == sg["GroupId"] for r in sg_resources)
+    r = next(r for r in sg_resources if r["resource_id"] == sg["GroupId"])
+    assert len(r["details"]["ingress_rules"]) >= 1
+    rule = r["details"]["ingress_rules"][0]
+    assert rule["from_port"] == 443
+    assert "0.0.0.0/0" in rule["cidr_ranges"]
+
+
+@mock_aws
+def test_network_collect_nacl():
+    region = "us-east-1"
+    client = boto3.client("ec2", region_name=region)
+    vpc = client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]
+    nacl = client.create_network_acl(VpcId=vpc["VpcId"])["NetworkAcl"]
+    resources = network.collect(region, "123456789012")
+    nacl_resources = [r for r in resources if r["resource_type"] == "ec2:nacl"]
+    assert any(r["resource_id"] == nacl["NetworkAclId"] for r in nacl_resources)
+
+
+@mock_aws
+def test_network_collect_route_table():
+    region = "us-east-1"
+    client = boto3.client("ec2", region_name=region)
+    vpc = client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]
+    rt = client.create_route_table(VpcId=vpc["VpcId"])["RouteTable"]
+    resources = network.collect(region, "123456789012")
+    rt_resources = [r for r in resources if r["resource_type"] == "ec2:route_table"]
+    assert any(r["resource_id"] == rt["RouteTableId"] for r in rt_resources)
+    r = next(r for r in rt_resources if r["resource_id"] == rt["RouteTableId"])
+    assert r["details"]["vpc_id"] == vpc["VpcId"]
+
+
+@mock_aws
+def test_network_collect_internet_gateway():
+    region = "us-east-1"
+    client = boto3.client("ec2", region_name=region)
+    vpc = client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]
+    igw = client.create_internet_gateway()["InternetGateway"]
+    client.attach_internet_gateway(InternetGatewayId=igw["InternetGatewayId"], VpcId=vpc["VpcId"])
+    resources = network.collect(region, "123456789012")
+    igw_resources = [r for r in resources if r["resource_type"] == "ec2:internet_gateway"]
+    assert any(r["resource_id"] == igw["InternetGatewayId"] for r in igw_resources)
+    r = next(r for r in igw_resources if r["resource_id"] == igw["InternetGatewayId"])
+    assert any(a["vpc_id"] == vpc["VpcId"] for a in r["details"]["attached_vpcs"])
+
+
+@mock_aws
+def test_network_collect_vpc_peering():
+    region = "us-east-1"
+    client = boto3.client("ec2", region_name=region)
+    vpc1 = client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]
+    vpc2 = client.create_vpc(CidrBlock="10.1.0.0/16")["Vpc"]
+    peering = client.create_vpc_peering_connection(
+        VpcId=vpc1["VpcId"], PeerVpcId=vpc2["VpcId"]
+    )["VpcPeeringConnection"]
+    resources = network.collect(region, "123456789012")
+    peer_resources = [r for r in resources if r["resource_type"] == "ec2:vpc_peering"]
+    assert any(r["resource_id"] == peering["VpcPeeringConnectionId"] for r in peer_resources)
+    r = next(r for r in peer_resources if r["resource_id"] == peering["VpcPeeringConnectionId"])
+    assert r["details"]["requester_vpc_id"] == vpc1["VpcId"]
+    assert r["details"]["accepter_vpc_id"] == vpc2["VpcId"]
+
+
+@mock_aws
+def test_network_resource_schema():
+    region = "us-east-1"
+    resources = network.collect(region, "123456789012")
+    for r in resources:
+        assert "resource_id" in r
+        assert "resource_type" in r
+        assert "name" in r
+        assert "region" in r
+        assert "account_id" in r
+        assert "details" in r
+        assert "tags" in r
+        assert "collected_at" in r

@@ -1,10 +1,10 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from . import ec2, rds, lambda_, ecs, s3, iam, ssm
+from . import ec2, rds, lambda_, ecs, s3, iam, ssm, network
 
 logger = logging.getLogger(__name__)
 
-COLLECTORS = [ec2, rds, lambda_, ecs, s3, iam, ssm]
+COLLECTORS = [ec2, rds, lambda_, ecs, s3, iam, ssm, network]
 
 def run_all(region: str, account_id: str) -> list[dict]:
     all_resources = []
