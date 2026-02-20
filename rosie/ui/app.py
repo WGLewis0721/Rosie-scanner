@@ -13,9 +13,9 @@ if "messages" not in st.session_state:
 
 with st.sidebar:
     st.header("⚙️ Controls")
+    region = st.text_input("Region", value="us-east-1")
+    account_id = st.text_input("Account ID", value="000000000000")
     if st.button("🔄 Refresh Inventory", type="primary"):
-        region = st.text_input("Region", value="us-east-1")
-        account_id = st.text_input("Account ID", value="000000000000")
         with st.spinner("Collecting AWS inventory..."):
             try:
                 resp = httpx.post(f"{API_BASE}/collect", json={"region": region, "account_id": account_id}, timeout=120)

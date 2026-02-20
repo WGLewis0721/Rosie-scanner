@@ -64,7 +64,7 @@ def get_inventory_summary() -> str:
 
 @tool
 def list_unpatched_instances(days: int = 90) -> str:
-    """List SSM managed instances that have not had a successful patch run in the given number of days."""
+    """List SSM managed instances that have not had active agent communication (last ping) within the given number of days."""
     from datetime import datetime, timezone, timedelta
     resources = _get_resources()
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)

@@ -159,6 +159,7 @@ resource "aws_ecs_service" "rosie_api" {
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = [aws_security_group.rosie_api.id]
+    # Private subnets require a NAT Gateway or VPC endpoints for AWS service access
     assign_public_ip = false
   }
 
