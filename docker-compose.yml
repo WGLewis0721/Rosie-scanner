@@ -36,6 +36,18 @@ services:
     volumes:
       - opensearch-data:/usr/share/opensearch/data
 
+  # Demo seeder — seeds the cache with dummy AWS resources using moto.
+  # Run with:  docker compose --profile demo up --build
+  demo-seeder:
+    build: .
+    command: python demo/seed_demo.py
+    environment:
+      - ROSIE_CACHE_DIR=/app/cache
+    volumes:
+      - rosie-cache:/app/cache
+    profiles:
+      - demo
+
 volumes:
   rosie-cache:
   opensearch-data:

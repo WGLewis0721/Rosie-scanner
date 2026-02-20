@@ -33,7 +33,44 @@ Rosie scans your AWS environment, indexes the inventory, and provides an intelli
 
 ## Quick Start
 
-### Docker Compose (Recommended)
+### Demo Mode (No AWS Account Needed)
+
+Want to try Rosie without a real AWS account?  The demo seeder uses
+[moto](https://github.com/getmoto/moto) to spin up a mock AWS environment,
+creates representative dummy resources (EC2, RDS, Lambda, ECS, S3, IAM), and
+pre-populates the Rosie cache so you can start asking questions immediately.
+
+**Option A — Docker Compose (recommended)**
+
+```bash
+export OPENAI_API_KEY=your-api-key   # or set LLM_PROVIDER=bedrock/ollama
+
+# Seed the cache first, then start the full stack
+docker compose --profile demo run --rm demo-seeder
+docker compose up -d
+```
+
+**Option B — Local Python**
+
+```bash
+pip install -r requirements.txt
+python demo/seed_demo.py
+uvicorn rosie.api.main:app --reload  # open http://localhost:8000
+# in a separate terminal:
+streamlit run rosie/ui/app.py        # open http://localhost:8501
+```
+
+Once the stack is running, try these example questions in the UI:
+
+- *"How many EC2 instances do we have in production?"*
+- *"Which Lambda functions are running deprecated runtimes?"*
+- *"Do we have any publicly accessible RDS databases?"*
+- *"Which S3 buckets are missing public access blocks?"*
+- *"Give me a summary of all resources."*
+
+---
+
+### Docker Compose (with real AWS)
 
 ```bash
 export OPENAI_API_KEY=your-api-key  # or use LLM_PROVIDER=bedrock
