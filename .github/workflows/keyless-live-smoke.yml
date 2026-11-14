@@ -25,7 +25,7 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements.txt
       - name: Public API smoke test (no API keys or secrets)
-        run: python scripts/keyless_smoke.py
+        run: python -m scripts.keyless_smoke
       - name: Upload sanitized smoke report
         if: always()
         uses: actions/upload-artifact@v4
