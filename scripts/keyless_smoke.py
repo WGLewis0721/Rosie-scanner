@@ -24,8 +24,13 @@ def main():
                 data = request_json(client, url, params)
                 raw = data.get(field, []) if field else data
                 rows = [m for row in raw if (m := normalizer(row)) is not None]
+                raw_fields = [{"ticker": item.get("ticker"), "status": item.get("status"),
+                               "close_time": item.get("close_time"),
+                               "expected_expiration_time": item.get("expected_expiration_time")}
+                              for item in raw[:2]] if name == "kalshi" else []
                 output["providers"][name] = {
-                    "status": "ok", "markets": len(rows),
+                    "status": "ok", "raw_count": len(raw), "markets": len(rows),
+                    "kalshi_raw_sample": raw_fields,
                     "example": [{"id": row.market_id, "title": row.title[:110],
                                  "ask_a": row.ask_a, "indicative_a": row.indicative_a}
                                 for row in rows[:3]]
