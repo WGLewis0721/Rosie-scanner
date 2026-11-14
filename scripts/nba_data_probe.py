@@ -2,9 +2,9 @@
 import json
 import httpx
 from market_scan import request_json
-from datetime import datetime
+from datetime import datetime, timezone
 with httpx.Client(timeout=20) as c:
-    data=request_json(c,"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",{"dates":"20261114"})
+    data=request_json(c,"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",{"dates":datetime.now(timezone.utc).strftime("%Y%m%d")})
 for item in data.get("events",[]):
     comp=(item.get("competitions") or [{}])[0]
     teams=[{"team": x.get("team",{}).get("displayName"),"abbreviation": x.get("team",{}).get("abbreviation"),"homeAway":x.get("homeAway")} for x in comp.get("competitors",[])]
