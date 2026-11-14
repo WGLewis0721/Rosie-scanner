@@ -1,9 +1,0 @@
-__pycache__/
-.pytest_cache/
-.venv/
-.env
-*.py[cod]
-data/*.csv
-!data/*.example.csv
-rosie_scan.json
-.streamlit/secrets.toml

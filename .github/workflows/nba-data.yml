@@ -1,0 +1,22 @@
+name: Inspect public NBA odds
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nba-data.yml'
+      - 'scripts/nba_data_probe.py'
+  pull_request:
+    paths:
+      - '.github/workflows/nba-data.yml'
+      - 'scripts/nba_data_probe.py'
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install httpx
+      - run: python -m scripts.nba_data_probe
