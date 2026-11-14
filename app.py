@@ -17,7 +17,7 @@ st.warning("Market odds are prices, NOT validated win probabilities. Rosie only 
 
 @st.cache_data(ttl=600, show_spinner="Fetching public markets (cached for 10 minutes)...")
 def get_markets(per_platform: int):
-    return collect_all(per_platform)
+    return (*collect_all(per_platform), now_utc().strftime('%Y-%m-%d %H:%M UTC'))
 
 
 def to_stream(upload):
@@ -40,7 +40,7 @@ with st.sidebar:
         get_markets.clear()
         st.rerun()
 
-markets, errors = get_markets(maximum)
+markets, errors, scanned_at = get_markets(maximum)
 evidence = load_evidence(to_stream(forecasts), to_stream(sportsbooks))
 validated_markets = [m for m in markets if m.platform == "Polymarket" and m.key in evidence]
 quote_warnings = []
@@ -59,7 +59,7 @@ a.metric("Contracts scanned", f"{len(markets):,}")
 b.metric("Kalshi", f"{counts['Kalshi']:,}")
 c.metric("Polymarket", f"{counts['Polymarket']:,}")
 d.metric("Evidence-backed opportunities", len(picks))
-st.caption(f"Scanned at {now_utc().strftime('%Y-%m-%d %H:%M UTC')} · Public quotes can change · Only the first 75 evidence-backed Polymarket markets receive CLOB verification per refresh")
+st.caption(f"Scanned at {scanned_at} · Public quotes can change · Only the first 75 evidence-backed Polymarket markets receive CLOB verification per refresh")
 
 for name, error in errors.items():
     st.error(f"{name} feed failed: {error}. Totals may be incomplete.")
