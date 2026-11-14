@@ -8,6 +8,8 @@ import streamlit as st
 from market_scan import (
     collect_all, load_evidence, matching_candidates, now_utc, quote_poly_books, score,
 )
+from nba_odds import get_nba, day_central, match_team_sides, board as nba_board
+
 
 st.set_page_config(page_title="Rosie | Market Intelligence", page_icon="🌹", layout="wide")
 st.title("🌹 Rosie")
@@ -65,6 +67,60 @@ for name, error in errors.items():
     st.error(f"{name} feed failed: {error}. Totals may be incomplete.")
 if quote_warnings:
     st.info(f"{len(quote_warnings)} order-book quotes could not be verified. Those contracts are excluded.")
+
+st.subheader("🏀 Tonight's NBA — no-key moneyline comparison")
+st.caption("Free ESPN-listed sportsbook moneylines vs available Kalshi/Polymarket buy asks. Comparison only: not a proprietary win model.")
+@st.cache_data(ttl=120, show_spinner="Reading ESPN's public NBA scoreboard...")
+def nba_tonight(day):
+    return get_nba(day)
+
+nba_error = ""
+nba_rows = []
+nba_data = []
+try:
+    nba_data = nba_tonight(day_central())
+except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+    nba_error = f"{type(exc).__name__}: {exc}"
+if nba_error:
+    st.error(f"NBA odds feed unavailable: {nba_error}. No substitute odds have been fabricated.")
+else:
+    if not nba_data:
+        st.info("No remaining pregame NBA games with supported two-way sportsbook moneylines tonight.")
+    else:
+        nba_poly = [m for m in markets if m.platform == "Polymarket"
+                    and any(match_team_sides(m, g) for g in nba_data)]
+        verified_update = {}
+        if nba_poly:
+            with st.spinner("Verifying matching Polymarket purchase-side asks..."):
+                with httpx.Client(follow_redirects=True) as client:
+                    quotes, issues = quote_poly_books(client, nba_poly, max_markets=75)
+                verified_update = {m.key: m for m in quotes}
+                if issues:
+                    st.caption(f"{len(issues)} Polymarket book queries were unavailable and are excluded from supported edges.")
+        nba_markets = [verified_update.get(m.key, m) for m in markets]
+        nba_rows = nba_board(nba_data, nba_markets)
+        f1, f2, f3 = st.columns(3)
+        f1.metric("Pregame NBA matchups", len(nba_data))
+        f2.metric("Verified buy-side comparisons", sum(x["verified"] for x in nba_rows))
+        f3.metric("≥5-point estimated net edge", sum(x["supported"] for x in nba_rows))
+        favorites_only = st.checkbox("Show only estimated 50%+ favorites", value=True)
+        visible_nba = [r for r in nba_rows if r["fair"] >= .50 or not favorites_only]
+        st.dataframe([{
+            "Game": r["game"], "Outcome": r["team"],
+            "Book": r["provider"], "Book moneyline": f"{r['american']:+d}",
+            "No-vig book probability": f"{r['fair']:.1%}",
+            "Max Kalshi ask for 5pt edge": f"{r['target_kalshi']:.0%}",
+            "Max Poly ask for 5pt edge": f"{r['target_poly']:.0%}",
+            "Best verified platform": r["platform"] or "Not matched/verified",
+            "Actual verified ask": f"{r['ask']:.1%}" if r["ask"] is not None else "—",
+            "Estimated net edge": f"{r['net_edge']:+.1%}" if r["net_edge"] is not None else "—",
+            "Screen passes": "YES — recheck" if r["supported"] else "No confirmed edge",
+            "Market": r["market_url"] or "",
+        } for r in visible_nba], hide_index=True, use_container_width=True)
+        if not any(r["supported"] for r in nba_rows):
+            st.info("No NBA contracts currently pass the supported 5-point net-edge screen. The maximum-ask columns are thresholds, NOT live offers.")
+        st.markdown("[Live NBA platform comparisons (Spot Angle)](https://spotangle.ai/odds/nba) · [ESPN NBA odds](https://www.espn.com/nba/scoreboard)")
+        st.caption("Source: public ESPN scoreboard, refreshed at most every 2 min, plus Rosie's cached public market collection (manual Refresh available). ESPN may change the odds schema or omit games. 'Close' is ESPN's field name, not a timestamp verification. De-vigged sportsbook consensus is NOT a guarantee. No buy/no recommendation without a verified purchase ask and book depth; estimated fees/slippage may differ from execution.")
 
 st.subheader("Evidence-backed opportunities")
 if picks:
