@@ -43,6 +43,16 @@ def test_poly_indicative_not_verified():
     assert score([m], evidence(m, 0.85)) == []
 
 
+def test_poly_missing_or_empty_events_safe():
+    for events in ([], None):
+        m = normalize_poly({"id": "99", "slug": "event-title", "events": events,
+            "question": "Will X?", "active": True, "closed": False,
+            "endDate": future(), "outcomes": '["Yes","No"]',
+            "clobTokenIds": '["t1","t2"]'})
+        assert m is not None
+        assert m.url.endswith("/event/event-title")
+
+
 def test_score_uses_independent_evidence_and_actual_ask():
     m = sample()
     assert score([m], {}) == []
