@@ -169,12 +169,15 @@ def normalize_poly(row: dict) -> Market | None:
     slug = str(row.get("slug") or "")
     if not slug or not row.get("id"):
         return None
+    events = row.get("events")
+    event_slug = (events[0].get("slug") if isinstance(events, list) and events
+                  and isinstance(events[0], dict) else None)
     return Market(
         platform="Polymarket", market_id=str(row["id"]),
         title=str(row.get("question") or slug),
         outcome_a=str(labels[0]), outcome_b=str(labels[1]),
         close_at=closing.isoformat(),
-        url="https://polymarket.com/event/" + quote(str(row.get("events", [{}])[0].get("slug") or slug), safe="-"),
+        url="https://polymarket.com/event/" + quote(str(event_slug or slug), safe="-"),
         rules=str(row.get("description") or ""),
         category=str(row.get("category") or ""),
         volume=number(row.get("volumeNum") or row.get("volume")) or 0,
