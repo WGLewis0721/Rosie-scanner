@@ -8,16 +8,22 @@ from pathlib import Path
 
 import httpx
 from market_scan import (
-    collect_kalshi, collect_polymarket, now_utc, request_json,
+    KALSHI, GAMMA, normalize_kalshi, normalize_poly, now_utc, request_json,
 )
 
 
 def main():
     output = {"timestamp_utc": now_utc().isoformat(), "requires_api_key": False, "providers": {}}
     with httpx.Client(follow_redirects=True, timeout=20) as client:
-        for name, fetch in (("kalshi", collect_kalshi), ("polymarket", collect_polymarket)):
+        for name, url, params, normalizer, field in (
+            ("kalshi", KALSHI + "/markets", {"limit": 10, "status": "open"}, normalize_kalshi, "markets"),
+            ("polymarket", GAMMA + "/markets", {"limit": 10, "active": "true", "closed": "false"}, normalize_poly, None),
+        ):
+            print(f"Checking {name} public GET...", flush=True)
             try:
-                rows = fetch(client, 50)
+                data = request_json(client, url, params)
+                raw = data.get(field, []) if field else data
+                rows = [m for row in raw if (m := normalizer(row)) is not None]
                 output["providers"][name] = {
                     "status": "ok", "markets": len(rows),
                     "example": [{"id": row.market_id, "title": row.title[:110],
