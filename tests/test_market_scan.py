@@ -34,6 +34,17 @@ def test_normalize_kalshi_dollar_and_cent_prices():
     assert m.volume == 250
 
 
+
+def test_kalshi_active_status_from_live_public_api():
+    m = normalize_kalshi({"ticker": "KXACTIVE", "title": "Active event",
+        "status": "active", "close_time": future(),
+        "yes_ask_dollars": "0.6300", "no_ask_dollars": "0.3900",
+        "yes_ask_size_fp": "30", "no_ask_size_fp": "30"})
+    assert m is not None
+    assert m.ask_a == .63
+    assert m.ask_size_a == 30
+
+
 def test_poly_indicative_not_verified():
     m = normalize_poly({"id": "99", "slug": "test-event", "question": "Will X?",
         "active": True, "closed": False, "endDate": future(),
