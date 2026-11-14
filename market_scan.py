@@ -123,7 +123,7 @@ class Market:
 
 
 def normalize_kalshi(row: dict) -> Market | None:
-    if row.get("status") != "open" or not row.get("ticker"):
+    if row.get("status") not in ("open", "active") or not row.get("ticker"):
         return None
     closing = parse_date(row.get("close_time") or row.get("expected_expiration_time"))
     if closing is None or closing <= now_utc():
