@@ -26,6 +26,10 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Public API smoke test (no API keys or secrets)
         run: python -m scripts.keyless_smoke
+      - name: Run Rosie scanner CLI with no keys
+        run: |
+          python market_scan.py scan --limit 100
+          python -c "import json; d=json.load(open('rosie_scan.json')); print('Contracts scanned:', d['market_count']); print('Provider errors:', d['platform_errors']); assert d['market_count'] >= 100, 'Live discovery returned too few markets'"
       - name: Upload sanitized smoke report
         if: always()
         uses: actions/upload-artifact@v4
