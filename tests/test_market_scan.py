@@ -170,3 +170,36 @@ def test_clob_reads_both_token_books():
     updated, errors = quote_poly_books(Client(), [m])
     assert not errors and updated[0].quote_status == "orderbook"
     assert updated[0].ask_size_a == 45
+
+
+def test_polymarket_collection_uses_keyset_beyond_gamma_offset_cap():
+    # Gamma /markets rejects offset > 2000 with HTTP 422; deep scans need /markets/keyset.
+    from datetime import timedelta
+    closes = (now_utc() + timedelta(days=3)).isoformat()
+    calls = []
+
+    def row(i):
+        return {"id": str(i), "slug": f"m{i}", "question": f"Q{i}",
+                "outcomes": '["Yes","No"]', "outcomePrices": '["0.5","0.5"]',
+                "clobTokenIds": '["a%d","b%d"]' % (i, i), "endDate": closes,
+                "active": True, "closed": False}
+
+    class Client:
+        def get(self, url, params=None, headers=None, timeout=None):
+            calls.append((url, dict(params or {})))
+            assert "offset" not in (params or {}), "offset pagination hits the 2000 cap"
+            page = len(calls)
+            class Response:
+                status_code = 200
+                headers = {}
+                def raise_for_status(self):
+                    pass
+                def json(self_inner):
+                    return {"markets": [row(page * 1000 + k) for k in range(100)],
+                            "next_cursor": f"c{page}"}
+            return Response()
+
+    out = collect_polymarket(Client(), 250)
+    assert len(out) == 250
+    assert all(url.endswith("/markets/keyset") for url, _ in calls)
+    assert calls[1][1]["after_cursor"] == "c1"

@@ -4,10 +4,21 @@ Install: pip install 'mcp>=1.28,<2'
 Launch: python rosie_mcp.py
 Uses stdio only; no HTTP listener, scheduler, account or order execution.
 """
+from pathlib import Path
+
 from mcp.server.fastmcp import FastMCP
 from rosie_advisor import run_nba, resolved_market_audit, read_history, fit_calibrator
 
 mcp = FastMCP("Rosie Read-Only Research")
+_ROOT = Path(__file__).resolve().parent
+
+
+def _resolve(path: str) -> str:
+    """MCP clients start stdio servers from any cwd; anchor relative paths to the repo."""
+    if not path or Path(path).is_absolute():
+        return path
+    return str(_ROOT / path)
+
 
 @mcp.tool()
 def ask_rosie(question: str, bankroll: float = 0.0) -> dict:
@@ -19,7 +30,18 @@ def ask_rosie(question: str, bankroll: float = 0.0) -> dict:
     REVIEW and a conditional stake cap. Never places an order.
     """
     from rosie_query import ask_game
-    return ask_game(question, max(0., min(float(bankroll), 1000000.)))
+    return ask_game(question, max(0., min(float(bankroll), 1000000.)),
+                    history_file=_resolve("data/nba_history.csv"))
+
+
+@mcp.tool()
+def stake_cap(bankroll: float = 500.0) -> dict:
+    """Conservative per-position stake ceiling for a bankroll (e.g. 'with $500, what is my cap?').
+
+    Pure arithmetic, no network. The cap only ever applies to a REVIEW; PASS means USD 0.
+    """
+    from rosie_advisor import stake_policy
+    return stake_policy(max(0., min(float(bankroll), 1000000.)))
 
 
 @mcp.tool()
@@ -33,13 +55,14 @@ def nba_opportunities(date: str = "", bankroll: float = 0.0,
     history_file: local historical CSV from explicit 'history' CLI call.
     sportsbooks_file: optional other pregame bookmaker quotes CSV.
     """
-    return run_nba(date or None, history_file, sportsbooks_file or None,
+    return run_nba(date or None, _resolve(history_file),
+                   _resolve(sportsbooks_file) or None,
                    max(0.,min(float(bankroll),1000000.)))
 
 @mcp.tool()
 def nba_calibration_status(history_file: str = "data/nba_history.csv") -> dict:
     """Show historical sample size, held-out Brier/log loss, and model gate."""
-    return fit_calibrator(read_history(history_file))
+    return fit_calibrator(read_history(_resolve(history_file)))
 
 @mcp.tool()
 def nba_resolved_catalog(limit: int = 100) -> dict:

@@ -38,6 +38,19 @@ ABBR = {
 }
 HISTORY_FIELDS = ("game_id","date","home","away","home_ml","away_ml","winner","provider","source_url")
 MIN_TRAIN, MIN_HOLDOUT = 120, 30
+MAX_STAKE_FRACTION, KELLY_FRACTION = .01, .25
+
+
+def stake_policy(bankroll):
+    """Hard ceiling per position; only ever applies to a REVIEW, never to a PASS."""
+    bankroll=max(0.,float(bankroll or 0))
+    return {"bankroll_usd":bankroll,
+            "max_per_position_usd":round(bankroll*MAX_STAKE_FRACTION,2),
+            "max_fraction_of_bankroll":MAX_STAKE_FRACTION,
+            "kelly_fraction":KELLY_FRACTION,
+            "rule":"stake = min(1% of bankroll, quarter-Kelly on after-cost edge)",
+            "applies_only_when":"REVIEW",
+            "note":"PASS means USD 0. REVIEW still requires manual lineup, price and rule checks."}
 
 
 def _logit(p):
@@ -133,6 +146,13 @@ def _odds(raw):
                     return result
         return american(side.get("odds"))
     home,away=pick(h),pick(a)
+    if home is None or away is None:
+        # ESPN core odds items: homeTeamOdds/awayTeamOdds.close.moneyLine.american
+        def core(key):
+            close=(raw.get(key) or {}).get("close") or {}
+            line=close.get("moneyLine") if isinstance(close,dict) else None
+            return american(line.get("american")) if isinstance(line,dict) else None
+        home,away=core("homeTeamOdds"),core("awayTeamOdds")
     if home is None or away is None:
         return None
     return home,away
@@ -356,10 +376,10 @@ def evaluate(games,markets,history=(),extra_books=None,bankroll=0.,minimum_edge=
     extra_books=extra_books or {}
     result=[]
     for game in games:
-        sources=[{"provider":game.provider,"p":game.fair_home,"url":game.link,"as_of":"ESPN pregame feed"}]
+        sources=[{"provider":game.provider,"p":game.fair_home,"p_side":"home","url":game.link,"as_of":"ESPN pregame feed"}]
         for key,book in extra_books.get((game.home,game.away),{}).items():
             if key!=game.provider.lower():
-                sources.append(book)
+                sources.append(dict(book,p_side="home"))
         ps=[x["p"] for x in sources]
         median=statistics.median(ps)
         disagreement=max(ps)-min(ps)
@@ -418,7 +438,7 @@ def evaluate(games,markets,history=(),extra_books=None,bankroll=0.,minimum_edge=
             if qualified and bankroll>0:
                 cost=best["cost_estimate"]
                 kelly=max(0,(p-cost)/(1-cost)) if cost<1 else 0
-                stake=round(min(bankroll*.01,bankroll*.25*kelly),2)
+                stake=round(min(bankroll*MAX_STAKE_FRACTION,bankroll*KELLY_FRACTION*kelly),2)
             result.append({"game":f"{game.away} @ {game.home}",
                 "game_id":game.id,"start":game.start,"team":team,
                 "status":status,"estimated_probability":round(p,4),

@@ -3,10 +3,10 @@
 Deterministic team/date parsing: no LLM or scheduler required. Never places orders.
 """
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from market_scan import now_utc
-from rosie_advisor import ABBR, run_nba
+from rosie_advisor import ABBR, run_nba, stake_policy
 
 CUSTOM_ALIASES = {
     "Cleveland Cavaliers": ("cavs",),
@@ -65,12 +65,42 @@ def parse_question(question, today=None):
     return target.strftime("%Y%m%d"), teams
 
 
+def _schedule_for(provider, day, teams):
+    """Games that exist but cannot be bet pregame. Best effort; never blocks the answer."""
+    if provider is None:
+        return []
+    try:
+        return [s for s in provider(day) if _game_matches(s.get("game", ""), teams)]
+    except Exception:
+        return []
+
+
+def _explain(entry):
+    name, when = entry["game"], entry.get("start")
+    if entry.get("state") == "post":
+        return f"{name} has already finished."
+    tip = _parse_start(when)
+    if entry.get("state") == "in" or (tip and tip <= now_utc()):
+        return f"{name} has already started ({when}), so no pregame price applies."
+    if not entry.get("has_line"):
+        return f"{name} is scheduled ({when}) but has no sourced bookmaker line yet."
+    return (f"{name} is listed ({when}) with a bookmaker line, but no usable "
+            "pregame moneyline was returned.")
+
+
+def _parse_start(value):
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
 def _game_matches(game, team_names):
     return not team_names or all(t in game.split(" @ ") for t in team_names)
 
 
 def ask_game(question, bankroll=0., history_file="data/nba_history.csv",
-             books_file=None, report_provider=None):
+             books_file=None, report_provider=None, schedule_provider=None):
     """Ask Rosie about an NBA matchup; output both venues and a reasoned PASS/REVIEW.
 
     Missing live quotes never become assumed prices. REVIEW is not buy execution.
@@ -82,6 +112,9 @@ def ask_game(question, bankroll=0., history_file="data/nba_history.csv",
         raise ValueError("Bankroll must be a nonnegative number")
     if not 0 <= budget <= 1000000:
         raise ValueError("Bankroll must be between 0 and 1,000,000 USD")
+    if schedule_provider is None and report_provider is None:
+        from nba_odds import get_schedule
+        schedule_provider = get_schedule
     provider = report_provider or run_nba
     report = provider(day, history_file, books_file, budget)
     all_rows = report.get("recommendations") or []
@@ -90,9 +123,13 @@ def ask_game(question, bankroll=0., history_file="data/nba_history.csv",
     if not games:
         available = sorted({r["game"] for r in all_rows})
         requested = " vs ".join(teams) if teams else "NBA slate"
+        schedule = _schedule_for(schedule_provider, day, teams)
         summary = (f"PASS. No pregame matchup with a sourced bookmaker line for "
                    f"{requested} on {day}. Suggested stake: USD 0.")
-        return {"question":question,"date":day,"status":"PASS",
+        if schedule:
+            summary += " " + " ".join(_explain(s) for s in schedule)
+        return {"question":question,"date":day,"status":"PASS","schedule":schedule,
+                "stake_policy":stake_policy(budget),
                 "summary":summary,"requested_teams":teams,"games":[],
                 "available_games":available,"recommendations":[],"platform_comparisons":[],
                 "model":report.get("model",{}),"feed_errors":report.get("feed_errors",[]),
@@ -151,5 +188,6 @@ def ask_game(question, bankroll=0., history_file="data/nba_history.csv",
             "requested_teams":teams,"games":games,"recommendations":rows,
             "platform_comparisons":comparisons,
             "model":report.get("model",{}),"feed_errors":report.get("feed_errors",[]),
-            "stake_usd":stake,"generated_at":report.get("generated_at"),
+            "stake_usd":stake,"stake_policy":stake_policy(budget),
+            "generated_at":report.get("generated_at"),
             "note":"On-demand only. No order placement; check injuries, rules and quote freshness."}
