@@ -10,6 +10,19 @@ from rosie_advisor import run_nba, resolved_market_audit, read_history, fit_cali
 mcp = FastMCP("Rosie Read-Only Research")
 
 @mcp.tool()
+def ask_rosie(question: str, bankroll: float = 0.0) -> dict:
+    """Answer natural-language NBA matchup questions on demand using Kalshi and
+    Polymarket price checks and bookmaker-derived fair odds.
+
+    Example: 'Cavs vs Mavs tonight—what should I buy on Kalshi and Polymarket?'
+    Returns a specific game, both exchanges, buy price thresholds, PASS or
+    REVIEW and a conditional stake cap. Never places an order.
+    """
+    from rosie_query import ask_game
+    return ask_game(question, max(0., min(float(bankroll), 1000000.)))
+
+
+@mcp.tool()
 def nba_opportunities(date: str = "", bankroll: float = 0.0,
                       history_file: str = "data/nba_history.csv",
                       sportsbooks_file: str = "") -> dict:

@@ -124,37 +124,41 @@ else:
 
 
 # Optional vertical expansion: run only when the user clicks; original views stay.
-with st.expander("🌹 Rosie Advisor — on-demand NBA research (experimental)"):
-    st.caption("Uses existing market scanners, sourced bookmaker probabilities and a guarded historical calibration. No automated orders or scheduled checks.")
+with st.expander("🌹 Rosie Advisor — ask about tonight's NBA game", expanded=False):
+    st.caption("Ask about one matchup. Rosie compares Kalshi and Polymarket executable prices with sourced bookmaker odds; no trades or automatic alerts.")
+    question = st.text_input("Ask Rosie", placeholder="Cavs vs Mavericks tonight — what should I pick?", key="rosie_question")
     budget = st.number_input("Reference bankroll (USD)", min_value=0.0, max_value=100000.0, value=0.0, step=10.0, key="advisor_bankroll")
-    st.caption("To unlock historical calibration, explicitly build data/nba_history.csv using docs/ON_DEMAND.md. Missing evidence means PASS.")
-    if st.button("Evaluate tonight's NBA picks now", key="advisor_run"):
-        from rosie_advisor import run_nba
-        with st.spinner("Checking pregame books, outcomes and verified asks..."):
+    if st.button("Ask Rosie now", key="advisor_run"):
+        from rosie_query import ask_game
+        with st.spinner("Checking the game, bookmaker lines and eligible exchange asks..."):
             try:
-                report = run_nba(bankroll=budget)
-                m = report.get("model", {})
-                st.caption(f"Calibration: {m.get('mode', 'unavailable')} · Historical games: {m.get('history_games', 0)} · Validated: {m.get('validated', False)}")
+                report = ask_game(question, bankroll=budget)
+                st.write(report["summary"])
                 if report.get("feed_errors"):
-                    st.warning("Some source queries failed: " + "; ".join(report["feed_errors"][:5]))
-                recommendations = report.get("recommendations", [])
-                if recommendations:
+                    st.warning("Data provider issues: " + "; ".join(report["feed_errors"][:5]))
+                model = report.get("model", {})
+                st.caption(f"Probability basis: {model.get('mode','not available')}. Historical calibration validated: {model.get('validated', False)}.")
+                comparisons = report.get("platform_comparisons", [])
+                if comparisons:
                     st.dataframe([{
-                        "Game": r["game"], "Pick": r["team"], "Status": r["status"],
-                        "Probability": f"{r['estimated_probability']:.1%}",
-                        "Books": r["bookmaker_count"],
-                        "Verified ask": (f"{r['best_verified_contract']['ask']:.0%}" if r["best_verified_contract"] else "—"),
-                        "Net edge": (f"{r['best_verified_contract']['edge']:+.1%}" if r["best_verified_contract"] else "—"),
-                        "Conditional stake cap": f"USD {r['conditional_stake_cap']:.2f}",
-                        "Why not": "; ".join(r["reasons"]),
-                    } for r in recommendations], hide_index=True, use_container_width=True)
-                    st.download_button("Export advisor report (JSON)",
-                                       data=__import__("json").dumps(report, indent=2),
-                                       file_name="rosie_advisor_nba.json", mime="application/json")
-                else:
-                    st.info(report.get("message", "No pregame NBA research results available."))
+                        "Matchup": q["game"], "Team": q["team"], "Market": q["platform"],
+                        "Verified buy ask": f"{q['ask']:.0%}" if q["ask"] is not None else "Not verified",
+                        "Estimated fair probability": f"{q['estimated_probability']:.1%}",
+                        "Max illustrative ask for 5pt edge": (
+                            f"{q['max_buy_price_for_5pt_edge']:.1%}"
+                            if q["max_buy_price_for_5pt_edge"] is not None else "—"),
+                        "After-cost edge": (f"{q['estimated_after_cost_edge']:+.1%}"
+                                            if q["estimated_after_cost_edge"] is not None else "—"),
+                        "Status": q["recommendation_status"],
+                        "Contract": q["market_url"] or "",
+                    } for q in comparisons], hide_index=True, use_container_width=True)
+                elif report.get("available_games"):
+                    st.caption("Available pregame NBA games: " + "; ".join(report["available_games"]))
+                st.download_button("Export Rosie answer (JSON)",
+                                   data=__import__("json").dumps(report, indent=2),
+                                   file_name="rosie_answer.json", mime="application/json")
             except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
-                st.error(f"On-demand research unavailable ({type(exc).__name__}); no pick was issued.")
+                st.error(f"Rosie cannot produce a supported answer ({type(exc).__name__}): {exc}")
 
 st.subheader("Evidence-backed opportunities")
 if picks:

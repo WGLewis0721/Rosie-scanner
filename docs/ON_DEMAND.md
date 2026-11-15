@@ -74,3 +74,41 @@ python rosie_advisor.py snapshots --market-id 0xYOUR_ACTUAL_64_HEX_ID --from-utc
 The first saves explicit *resolved_outcome* labels, grouped under event IDs (avoid treating each YES/NO leg as a separate event). The second saves a bounded historical quote window with timestamps. **Neither automatically enters the win-probability training set**: one resolved market's final price is not its pregame fair probability. Future replay evaluation must join only verified equivalent rules, pregame timestamps and final outcomes. The related local MCP tools are \`resolved_markets_nba\` and \`resolved_markets_snapshots\`.
 
 Provider documentation: https://resolvedmarkets.com/docs/endpoints/get-market-metadata and https://resolvedmarkets.com/docs/endpoints/market-history and https://resolvedmarkets.com/docs/billing.
+
+
+## Ask Rosie directly (single game, no redesign, no schedule)
+
+The normal-language interface is now the primary on-demand workflow. Open the existing
+Streamlit app; expand **Rosie Advisor**, type a question, click **Ask Rosie now**.
+Rosie responds with one matchup, a **separate row for Kalshi and Polymarket**,
+verified executable buy asks or **Not verified**, model/bookmaker probability, net
+edge after estimated trading costs, maximum illustrative price for a 5-point edge,
+and REVIEW/PASS with reasons.
+
+Examples:
+
+~~~text
+Cavs vs Mavs tonight — what should I pick?
+Dallas Mavericks tomorrow
+Which NBA games tonight look good on Kalshi and Polymarket?
+Cleveland vs Dallas on 2026-11-14
+~~~
+
+The same workflow can run in the terminal:
+
+~~~bash
+python rosie_advisor.py ask "Cavs vs Mavs tonight" --bankroll 500
+~~~
+
+For Claude or any local MCP-capable client, configure the local \`rosie_mcp.py\`
+server and ask naturally. The new **ask_rosie** tool accepts \`question\` and
+optional \`bankroll\`. The client must call the tool on demand; the tool does not
+push alerts or execute orders. ChatGPT can use the same JSON through an available
+execution environment, but ChatGPT cannot directly access a local stdio MCP
+server from this cloud chat. A separately connected or hosted supported endpoint
+is needed for seamless in-chat invocation.
+
+**No fabricated picks:** When source data, historical validation, multiple bookmakers,
+or verified executable exchange asks are missing, Rosie returns PASS and USD 0.
+A maximum illustrative buy price is not a quote. REVIEW requires manual lineup,
+price, market-rule and settlement checks before any purchase.
