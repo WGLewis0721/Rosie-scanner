@@ -67,3 +67,21 @@ def test_market_wrong_date_is_not_eligible():
 def test_empty_games_is_safe():
     assert board([],[])==[]
     assert parse_nba({"events":[]})==[]
+
+
+def test_schedule_reports_in_progress_and_unlined_games():
+    from nba_odds import parse_schedule
+    def ev(eid,home,away,state,odds):
+        return {"id":eid,"date":"2026-11-15T00:30Z","status":{"type":{"state":state}},
+                "competitions":[{"odds":odds,"competitors":[
+                    {"homeAway":"home","team":{"displayName":home}},
+                    {"homeAway":"away","team":{"displayName":away}}]}]}
+    data={"events":[ev("1","Cleveland Cavaliers","Dallas Mavericks","in",[]),
+                    ev("2","Boston Celtics","Dallas Mavericks","pre",[]),
+                    ev("3","Miami Heat","Detroit Pistons","pre",[{"provider":{"name":"DraftKings"}}])]}
+    rows=parse_schedule(data)
+    assert [r["game"] for r in rows]==["Dallas Mavericks @ Cleveland Cavaliers",
+                                       "Dallas Mavericks @ Boston Celtics",
+                                       "Detroit Pistons @ Miami Heat"]
+    assert [r["state"] for r in rows]==["in","pre","pre"]
+    assert [r["has_line"] for r in rows]==[False,False,True]

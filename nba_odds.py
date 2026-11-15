@@ -71,6 +71,28 @@ def parse_nba(data):
             break
     return sorted(games,key=lambda x:x.start)
 
+def parse_schedule(data):
+    """Every listed NBA game with its state, regardless of odds or pregame status."""
+    rows=[]
+    for event in data.get("events",[]):
+        comps=event.get("competitions") or []
+        if not comps:continue
+        comp=comps[0]
+        names={x.get("homeAway"):x.get("team",{}).get("displayName") for x in comp.get("competitors",[])}
+        home,away=names.get("home"),names.get("away")
+        if home not in TEAMS or away not in TEAMS:continue
+        start=parse_date(event.get("date"))
+        rows.append({"game":f"{away} @ {home}","start":start.isoformat() if start else None,
+                     "state":((event.get("status") or {}).get("type") or {}).get("state"),
+                     "has_line":bool(comp.get("odds"))})
+    return rows
+
+def get_schedule(day=None):
+    day=day or day_central()
+    if not re.fullmatch(r"\d{8}",day):raise ValueError("Invalid YYYYMMDD")
+    with httpx.Client(follow_redirects=True) as client:
+        return parse_schedule(request_json(client,ESPN_URL,{"dates":day}))
+
 def get_nba(day=None):
     day=day or day_central()
     if not re.fullmatch(r"\d{8}",day):raise ValueError("Invalid YYYYMMDD")

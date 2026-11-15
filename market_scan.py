@@ -214,14 +214,19 @@ def collect_kalshi(client: httpx.Client, limit: int = 3000) -> list[Market]:
 
 
 def collect_polymarket(client: httpx.Client, limit: int = 3000) -> list[Market]:
-    out, offset = [], 0
+    # Gamma /markets rejects offset > 2000 (HTTP 422); /markets/keyset paginates by cursor.
+    out, cursor, seen = [], None, set()
     while len(out) < limit:
         size = min(100, limit - len(out))
-        rows = request_json(client, GAMMA + "/markets", {
-            "active": "true", "closed": "false", "limit": size, "offset": offset,
+        params: dict[str, Any] = {
+            "active": "true", "closed": "false", "limit": size,
             "order": "volumeNum", "ascending": "false",
-        })
-        if not isinstance(rows, list) or not rows:
+        }
+        if cursor:
+            params["after_cursor"] = cursor
+        data = request_json(client, GAMMA + "/markets/keyset", params)
+        rows = data.get("markets") if isinstance(data, dict) else None
+        if not rows:
             break
         for row in rows:
             m = normalize_poly(row)
@@ -229,9 +234,10 @@ def collect_polymarket(client: httpx.Client, limit: int = 3000) -> list[Market]:
                 out.append(m)
                 if len(out) >= limit:
                     break
-        offset += len(rows)
-        if len(rows) < size:
+        cursor = data.get("next_cursor")
+        if not cursor or cursor in seen:
             break
+        seen.add(cursor)
     return out
 
 

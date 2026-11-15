@@ -112,3 +112,18 @@ is needed for seamless in-chat invocation.
 or verified executable exchange asks are missing, Rosie returns PASS and USD 0.
 A maximum illustrative buy price is not a quote. REVIEW requires manual lineup,
 price, market-rule and settlement checks before any purchase.
+
+
+## Windows + Claude Code / Claude Desktop (stdio, starts only when asked)
+
+~~~powershell
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt "mcp>=1.28,<2"
+claude mcp add --scope project rosie -- C:\path\to\Rosie-scanner\.venv\Scripts\python.exe C:\path\to\Rosie-scanner\rosie_mcp.py
+~~~
+
+Claude Desktop: add the same `command`/`args` under `mcpServers.rosie` in `claude_desktop_config.json` (Settings → Developer → Edit Config), then restart the app. Use absolute paths. The server resolves `data/nba_history.csv` relative to the repository, not the client's working directory.
+
+Tools: `ask_rosie`, `stake_cap` (arithmetic only; e.g. $500 → $5 ceiling, applies only to REVIEW), `nba_opportunities`, `nba_calibration_status`, `nba_resolved_catalog`, `resolved_markets_nba`, `resolved_markets_snapshots`.
+
+When a requested game is already in progress, finished, or has no sourced line yet, `ask_rosie` says so (`schedule` field) rather than reporting the game as missing.

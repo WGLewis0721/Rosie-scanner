@@ -59,3 +59,29 @@ def test_historical_training_rejects_non_closing_odds():
     # Postgame 'current' odds can be contaminated by live/in-game state.
     assert _odds({"moneyline":{"home":{"current":{"odds":"-200"}},
                                    "away":{"current":{"odds":"+180"}}}}) is None
+
+
+def test_core_odds_schema_uses_close_moneyline():
+    # Shape returned by sports.core.api.espn.com .../competitions/{id}/odds
+    raw={"provider":{"name":"DraftKings"},
+         "homeTeamOdds":{"moneyLine":-142,"close":{"moneyLine":{"american":"-140"}}},
+         "awayTeamOdds":{"moneyLine":120,"close":{"moneyLine":{"american":"+120"}}}}
+    assert _odds(raw)==(-140,120)
+
+
+def test_core_odds_schema_rejects_non_closing_lines():
+    raw={"homeTeamOdds":{"moneyLine":-142,"current":{"moneyLine":{"american":"-142"}}},
+         "awayTeamOdds":{"moneyLine":120,"current":{"moneyLine":{"american":"+120"}}}}
+    assert _odds(raw) is None
+
+
+def test_bookmaker_sources_declare_which_side_p_describes():
+    out=evaluate([game()],[],[],{},1000)
+    assert all(s["p_side"]=="home" for r in out["recommendations"] for s in r["bookmaker_sources"])
+
+
+def test_stake_policy_constants():
+    from rosie_advisor import stake_policy
+    p=stake_policy(500)
+    assert p["max_per_position_usd"]==5.0 and p["kelly_fraction"]==.25
+    assert stake_policy(-5)["max_per_position_usd"]==0.0

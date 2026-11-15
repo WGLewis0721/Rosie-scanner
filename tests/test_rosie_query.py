@@ -88,3 +88,46 @@ def test_review_requires_verified_venue_and_retains_other_venue_unknown():
     assert result["platform_comparisons"][0]["platform"]=="Kalshi"
     assert any(q["platform"]=="Polymarket" and q["ask"] is None
                for q in result["platform_comparisons"])
+
+
+def test_game_already_underway_is_explained_not_reported_as_missing():
+    sched=lambda day:[{"game":"Dallas Mavericks @ Cleveland Cavaliers",
+                       "start":"2026-11-15T00:30:00+00:00","state":"in","has_line":False}]
+    result=ask_game("Cavs vs Mavs tonight",report_provider=lambda *a:{"recommendations":[]},
+                    schedule_provider=sched)
+    assert result["status"]=="PASS" and result["stake_usd"]==0
+    assert "already started" in result["summary"]
+    assert result["schedule"][0]["state"]=="in"
+
+
+def test_scheduled_game_without_line_is_explained():
+    sched=lambda day:[{"game":"Dallas Mavericks @ Boston Celtics",
+                       "start":"2026-11-15T23:00:00+00:00","state":"pre","has_line":False}]
+    result=ask_game("Mavs 2026-11-15",report_provider=lambda *a:{"recommendations":[]},
+                    schedule_provider=sched)
+    assert "no sourced bookmaker line" in result["summary"]
+
+
+def test_schedule_failure_never_breaks_the_answer():
+    def boom(day):
+        raise RuntimeError("feed down")
+    result=ask_game("Cavs vs Mavs tonight",report_provider=lambda *a:{"recommendations":[]},
+                    schedule_provider=boom)
+    assert result["status"]=="PASS" and result["schedule"]==[]
+
+
+def test_stake_policy_is_explicit_and_conservative():
+    result=ask_game("Cavs vs Mavs tonight",bankroll=500,report_provider=fake_report)
+    policy=result["stake_policy"]
+    assert policy["max_per_position_usd"]==5.0
+    assert policy["applies_only_when"]=="REVIEW"
+    assert result["stake_usd"]==0
+
+
+def test_pregame_line_after_tipoff_is_explained_as_started():
+    sched=lambda day:[{"game":"Dallas Mavericks @ Boston Celtics",
+                       "start":"2020-01-01T00:00:00+00:00","state":"pre","has_line":True}]
+    result=ask_game("Mavs vs Celtics tonight",report_provider=lambda *a:{"recommendations":[]},
+                    schedule_provider=sched)
+    assert "has already started" in result["summary"]
+    assert "no sourced bookmaker line" not in result["summary"]
