@@ -351,6 +351,7 @@ def collect_nba_markets(games):
 
 def evaluate(games,markets,history=(),extra_books=None,bankroll=0.,minimum_edge=.05):
     """Evidence-gated recommendations. Fail closed when critical inputs are missing."""
+    from nba_odds import target_ask
     model=fit_calibrator(history)
     extra_books=extra_books or {}
     result=[]
@@ -385,6 +386,15 @@ def evaluate(games,markets,history=(),extra_books=None,bankroll=0.,minimum_edge=
                        "cost_estimate":round(cost,4),"edge":round(ev,4),
                        "spread":round(ask-bid,4),"ask_depth":depth,"url":m.url})
             best=max(possible,key=lambda x:x["edge"]) if possible else None
+            # Keep Kalshi and Polymarket separate. Never synthesize a live
+            # quote from an indicative price or another venue's orderbook.
+            venue_quotes={}
+            for platform in ("Kalshi","Polymarket"):
+                eligible=[q for q in possible if q["platform"]==platform]
+                venue_quotes[platform]={
+                    "best":max(eligible,key=lambda x:x["edge"]) if eligible else None,
+                    "max_buy_price_for_5pt_edge":target_ask(p,platform,minimum_edge,.01),
+                }
             reasons=[]
             if not model["validated"]:
                 reasons.append("No out-of-sample-validated historical calibration")
@@ -414,7 +424,8 @@ def evaluate(games,markets,history=(),extra_books=None,bankroll=0.,minimum_edge=
                 "status":status,"estimated_probability":round(p,4),
                 "bookmaker_count":len(sources),"bookmaker_sources":sources,
                 "bookmaker_range":round(disagreement,4),
-                "best_verified_contract":best,"conditional_stake_cap":stake,
+                "best_verified_contract":best,"platform_quotes":venue_quotes,
+                "conditional_stake_cap":stake,
                 "reasons":reasons})
     result.sort(key=lambda x:(x["status"]=="REVIEW",
                         x["best_verified_contract"]["edge"] if x["best_verified_contract"] else -1),reverse=True)
@@ -441,6 +452,11 @@ def run_nba(day=None,history_file="data/nba_history.csv",books_file=None,bankrol
 def main(argv=None):
     parser=argparse.ArgumentParser(description="Rosie on-demand NBA intelligence; no trading")
     cmd=parser.add_subparsers(dest="command",required=True)
+    ask=cmd.add_parser("ask",help="Ask about an NBA game in normal language")
+    ask.add_argument("question",help="Example: Cavs vs Mavs tonight")
+    ask.add_argument("--bankroll",type=float,default=0)
+    ask.add_argument("--history",default="data/nba_history.csv")
+    ask.add_argument("--books",default=None)
     nba=cmd.add_parser("nba",help="Return source-backed JSON and PASS/REVIEW statuses")
     nba.add_argument("--date",help="YYYYMMDD, defaults to today US Central")
     nba.add_argument("--history",default="data/nba_history.csv")
@@ -461,7 +477,10 @@ def main(argv=None):
     hist=cmd.add_parser("resolved",help="Inspect public resolved market catalogs (not train on them)")
     hist.add_argument("--limit",type=int,default=100)
     args=parser.parse_args(argv)
-    if args.command=="nba":
+    if args.command=="ask":
+        from rosie_query import ask_game
+        out=ask_game(args.question,args.bankroll,args.history,args.books)
+    elif args.command=="nba":
         out=run_nba(args.date,args.history,args.books,max(0,args.bankroll))
     elif args.command=="history":
         rows,errors=fetch_history(args.start,args.end)

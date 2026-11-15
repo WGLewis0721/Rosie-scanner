@@ -119,3 +119,19 @@ API and fee references: [Kalshi market API](https://docs.kalshi.com/api-referenc
 The existing dashboard stays intact. The separate optional \`rosie_advisor.py\` NBA research command adds historical closing-odds ingestion, guarded out-of-sample probability calibration, strict Kalshi NBA matching, sourced multi-book comparisons, conditional position sizing, a JSON output, and a local Claude/MCP-compatible server \`rosie_mcp.py\`. No automation or trading.
 
 Full setup and math: **[docs/ON_DEMAND.md](docs/ON_DEMAND.md)**. Optional Resolved Markets historical NBA archive adapter is supported with a separately supplied provider key; the core engine does not require it.
+
+
+### Just ask Rosie about tonight
+
+From the existing Streamlit dashboard, open **Rosie Advisor**, type
+\`Cavs vs Mavs tonight — what should I pick on Kalshi or Polymarket?\`,
+and click **Ask Rosie now**. Or:
+
+~~~bash
+python rosie_advisor.py ask "Cavs vs Mavs tonight" --bankroll 500
+~~~
+
+The same \`ask_rosie(question, bankroll)\` tool is available through the optional
+local MCP server for Claude-compatible clients. Output shows Kalshi and Polymarket
+separately; unavailable prices are labeled unverified. PASS means do not bet;
+REVIEW is conditional research, not a buy order. No scheduling or trading.
