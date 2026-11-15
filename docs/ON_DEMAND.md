@@ -58,3 +58,19 @@ For ChatGPT, the same JSON is usable through a supported execution environment; 
 7. No live injury or player-prop feature is claimed. Model risk, stale quotes, missing books, provider disagreements, correlated book prices, and execution slippage can invalidate an apparent edge.
 
 The resolved-market catalog is a **starting ingestion/audit capability**, not a resolved-outcome predictive model and not a historical P/L backtest. True historical order-book replay, injury-adjusted model, and forward paper-trading evaluation belong in later vertical expansions.
+
+
+## Resolved Markets (the historical data service) — optional
+
+This is separate from scanning public Kalshi settled contracts and closed Polymarket Gamma rows. Resolved Markets is a dedicated archive of timestamped historical prediction-market order books and **explicit** winning outcomes. It requires an API key; access to sports/NBA data requires the provider's sports-enabled tier. Rosie does not need that account to run the core NBA baseline.
+
+Set \`RESOLVED_MARKETS_API_KEY\` in your local environment (never store it in GitHub). On demand:
+
+~~~
+python rosie_advisor.py resolvedmarkets --limit 100 --out data/resolvedmarkets_nba.json
+python rosie_advisor.py snapshots --market-id 0xYOUR_ACTUAL_64_HEX_ID --from-utc "2026-11-12 16:00:00" --to-utc "2026-11-12 20:00:00"
+~~~
+
+The first saves explicit *resolved_outcome* labels, grouped under event IDs (avoid treating each YES/NO leg as a separate event). The second saves a bounded historical quote window with timestamps. **Neither automatically enters the win-probability training set**: one resolved market's final price is not its pregame fair probability. Future replay evaluation must join only verified equivalent rules, pregame timestamps and final outcomes. The related local MCP tools are \`resolved_markets_nba\` and \`resolved_markets_snapshots\`.
+
+Provider documentation: https://resolvedmarkets.com/docs/endpoints/get-market-metadata and https://resolvedmarkets.com/docs/endpoints/market-history and https://resolvedmarkets.com/docs/billing.

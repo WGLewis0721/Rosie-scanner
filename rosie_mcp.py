@@ -33,5 +33,20 @@ def nba_resolved_catalog(limit: int = 100) -> dict:
     """Read settled Kalshi and closed Polymarket catalog counts; no trading."""
     return resolved_market_audit(limit)
 
+@mcp.tool()
+def resolved_markets_nba(limit: int = 100) -> dict:
+    """Fetch real NBA settlement metadata from optional Resolved Markets subscription."""
+    from resolved_markets_provider import resolved_nba
+    return resolved_nba(limit)
+
+
+@mcp.tool()
+def resolved_markets_snapshots(market_id: str, from_utc: str, to_utc: str,
+                               limit: int = 500) -> dict:
+    """Fetch bounded historical order-book snapshots for manual backtest review."""
+    from resolved_markets_provider import historical_snapshots
+    return historical_snapshots(market_id, from_utc, to_utc, limit)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

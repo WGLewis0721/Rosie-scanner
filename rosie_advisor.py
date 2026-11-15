@@ -450,7 +450,15 @@ def main(argv=None):
     history.add_argument("--start",required=True)
     history.add_argument("--end",required=True)
     history.add_argument("--out",default="data/nba_history.csv")
-    hist=cmd.add_parser("resolved",help="Inspect resolved market catalogs (not train on them)")
+    provider=cmd.add_parser("resolvedmarkets",help="Fetch Resolved Markets NBA settlements (optional API key)")
+    provider.add_argument("--limit",type=int,default=100)
+    provider.add_argument("--out",default="data/resolvedmarkets_nba.json")
+    snapshots=cmd.add_parser("snapshots",help="Fetch one Resolved Markets historical pregame window")
+    snapshots.add_argument("--market-id",required=True)
+    snapshots.add_argument("--from-utc",required=True)
+    snapshots.add_argument("--to-utc",required=True)
+    snapshots.add_argument("--out",default="data/resolvedmarkets_snapshots.json")
+    hist=cmd.add_parser("resolved",help="Inspect public resolved market catalogs (not train on them)")
     hist.add_argument("--limit",type=int,default=100)
     args=parser.parse_args(argv)
     if args.command=="nba":
@@ -460,6 +468,14 @@ def main(argv=None):
         write_history(args.out,rows)
         out={"saved_to":args.out,"games_with_bookmaker_closes":len(rows),
              "errors":errors,"note":"Historical closing lines may be incomplete. No model if sample/holdout insufficient."}
+    elif args.command=="resolvedmarkets":
+        from resolved_markets_provider import resolved_nba,write_json
+        out=resolved_nba(args.limit)
+        out["saved_to"]=write_json(args.out,out)
+    elif args.command=="snapshots":
+        from resolved_markets_provider import historical_snapshots,write_json
+        out=historical_snapshots(args.market_id,args.from_utc,args.to_utc)
+        out["saved_to"]=write_json(args.out,out)
     else:
         out=resolved_market_audit(args.limit)
     print(json.dumps(out,indent=2,allow_nan=False))

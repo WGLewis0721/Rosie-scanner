@@ -112,3 +112,10 @@ Read-only uses **only public GETs** to Kalshi's `/markets`, Polymarket Gamma's `
 API and fee references: [Kalshi market API](https://docs.kalshi.com/api-reference/market/get-markets), [Kalshi fee schedule](https://kalshi.com/fee-schedule), [Polymarket public data](https://docs.polymarket.com/), [Polymarket fees](https://help.polymarket.com/en/articles/13364478-trading-fees). Reference repos are research inspirations; Rosie contains an independent implementation.
 
 **Risk:** Prices are volatile, markets can become illiquid or be voided, and an independently estimated probability may be wrong. This is research software, not a profitable strategy guarantee or financial advice.
+
+
+## On-demand NBA + AI vertical
+
+The existing dashboard stays intact. The separate optional \`rosie_advisor.py\` NBA research command adds historical closing-odds ingestion, guarded out-of-sample probability calibration, strict Kalshi NBA matching, sourced multi-book comparisons, conditional position sizing, a JSON output, and a local Claude/MCP-compatible server \`rosie_mcp.py\`. No automation or trading.
+
+Full setup and math: **[docs/ON_DEMAND.md](docs/ON_DEMAND.md)**. Optional Resolved Markets historical NBA archive adapter is supported with a separately supplied provider key; the core engine does not require it.
