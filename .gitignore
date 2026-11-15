@@ -7,3 +7,6 @@ data/*.csv
 !data/*.example.csv
 rosie_scan.json
 .streamlit/secrets.toml
+
+# Local on-demand research archives; may be large and contain licensed provider data
+data/*.json

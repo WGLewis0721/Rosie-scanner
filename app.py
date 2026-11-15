@@ -122,6 +122,40 @@ else:
         st.markdown("[Live NBA platform comparisons (Spot Angle)](https://spotangle.ai/odds/nba) · [ESPN NBA odds](https://www.espn.com/nba/scoreboard)")
         st.caption("Source: public ESPN scoreboard, refreshed at most every 2 min, plus Rosie's cached public market collection (manual Refresh available). ESPN may change the odds schema or omit games. 'Close' is ESPN's field name, not a timestamp verification. De-vigged sportsbook consensus is NOT a guarantee. No buy/no recommendation without a verified purchase ask and book depth; estimated fees/slippage may differ from execution.")
 
+
+# Optional vertical expansion: run only when the user clicks; original views stay.
+with st.expander("🌹 Rosie Advisor — on-demand NBA research (experimental)"):
+    st.caption("Uses existing market scanners, sourced bookmaker probabilities and a guarded historical calibration. No automated orders or scheduled checks.")
+    budget = st.number_input("Reference bankroll (USD)", min_value=0.0, max_value=100000.0, value=0.0, step=10.0, key="advisor_bankroll")
+    st.caption("To unlock historical calibration, explicitly build data/nba_history.csv using docs/ON_DEMAND.md. Missing evidence means PASS.")
+    if st.button("Evaluate tonight's NBA picks now", key="advisor_run"):
+        from rosie_advisor import run_nba
+        with st.spinner("Checking pregame books, outcomes and verified asks..."):
+            try:
+                report = run_nba(bankroll=budget)
+                m = report.get("model", {})
+                st.caption(f"Calibration: {m.get('mode', 'unavailable')} · Historical games: {m.get('history_games', 0)} · Validated: {m.get('validated', False)}")
+                if report.get("feed_errors"):
+                    st.warning("Some source queries failed: " + "; ".join(report["feed_errors"][:5]))
+                recommendations = report.get("recommendations", [])
+                if recommendations:
+                    st.dataframe([{
+                        "Game": r["game"], "Pick": r["team"], "Status": r["status"],
+                        "Probability": f"{r['estimated_probability']:.1%}",
+                        "Books": r["bookmaker_count"],
+                        "Verified ask": (f"{r['best_verified_contract']['ask']:.0%}" if r["best_verified_contract"] else "—"),
+                        "Net edge": (f"{r['best_verified_contract']['edge']:+.1%}" if r["best_verified_contract"] else "—"),
+                        "Conditional stake cap": f"USD {r['conditional_stake_cap']:.2f}",
+                        "Why not": "; ".join(r["reasons"]),
+                    } for r in recommendations], hide_index=True, use_container_width=True)
+                    st.download_button("Export advisor report (JSON)",
+                                       data=__import__("json").dumps(report, indent=2),
+                                       file_name="rosie_advisor_nba.json", mime="application/json")
+                else:
+                    st.info(report.get("message", "No pregame NBA research results available."))
+            except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
+                st.error(f"On-demand research unavailable ({type(exc).__name__}); no pick was issued.")
+
 st.subheader("Evidence-backed opportunities")
 if picks:
     st.dataframe([{
