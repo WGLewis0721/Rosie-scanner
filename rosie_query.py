@@ -47,6 +47,12 @@ def parse_question(question, today=None):
         if name == "Los Angeles Clippers":
             continue
         aliases = {name.casefold(), name.split()[-1].casefold(), code.casefold()}
+        city = name.split()[0].casefold()
+        # Unambiguous one-word city names: "Dallas tomorrow", "Cleveland tonight".
+        # Avoid generic prefixes (New/Los/San/Golden/LA/Oklahoma) matching
+        # multiple unrelated franchises.
+        if city not in {"new","los","san","golden","oklahoma","la"}:
+            aliases.add(city)
         aliases.update(CUSTOM_ALIASES.get(name, ()))
         if name == "LA Clippers":
             aliases.add("los angeles clippers")
