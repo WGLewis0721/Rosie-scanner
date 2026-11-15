@@ -53,3 +53,9 @@ def test_kalshi_match_needs_exact_event_date_and_matchup():
     bad=Market("Kalshi",f"KXNBAGAME-{date}DALBOS-CLE","Cleveland wins",
                "Cleveland","No",g.start,"https://kalshi.com")
     assert not kalshi_match(bad,g)
+
+
+def test_historical_training_rejects_non_closing_odds():
+    # Postgame 'current' odds can be contaminated by live/in-game state.
+    assert _odds({"moneyline":{"home":{"current":{"odds":"-200"}},
+                                   "away":{"current":{"odds":"+180"}}}}) is None

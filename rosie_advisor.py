@@ -125,7 +125,7 @@ def _odds(raw):
     h=(ml.get("home") or {}) if isinstance(ml,dict) else {}
     a=(ml.get("away") or {}) if isinstance(ml,dict) else {}
     def pick(side):
-        for key in ("close","current"):
+        for key in ("close",):
             v=side.get(key) or {}
             if isinstance(v,dict):
                 result=american(v.get("odds"))
